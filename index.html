@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reality (2008)</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;700&family=Syncopate:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body class="light-mode">
+    <div id="spotlight-overlay"></div>
+
+    <div id="splash-screen">
+        <div class="splash-content">
+            <h1 class="glitch" data-text="welcome to reality(2008)">welcome to reality(2008)</h1>
+            <div class="login-box">
+                <input type="text" id="username-input" placeholder="USERNAME" maxlength="15">
+                <button id="start-btn">ENTER REALITY</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-shell" class="hidden">
+        <div class="scanlines"></div>
+        <aside id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">REALITY</div>
+            </div>
+            <div id="tv-scroll-container">
+                <nav id="tv-scroll">
+                    <div class="nav-item active" data-view="feed">
+                        <span class="nav-icon">▤</span> FEED
+                    </div>
+                    <div class="nav-item" data-view="communities">
+                        <span class="nav-icon">❒</span> COMMUNITIES
+                    </div>
+                    <div class="nav-item" data-view="apps">
+                        <span class="nav-icon">◈</span> 50+ APPS
+                    </div>
+                    <div class="nav-item" data-view="tv">
+                        <span class="nav-icon">📺</span> TV SHOWS
+                    </div>
+                    <div class="nav-item" data-view="snackpack">
+                        <span class="nav-icon">🔒</span> ONLYSNACKPACK
+                    </div>
+                    <div class="nav-item" data-view="profile">
+                        <span class="nav-icon">👤</span> PROFILE
+                    </div>
+                    <div class="nav-item" data-view="settings">
+                        <span class="nav-icon">⚙</span> SETTINGS
+                    </div>
+                </nav>
+            </div>
+            <div class="sidebar-footer">
+                <div id="current-user-display">Guest</div>
+                <button id="logout-btn">DISCONNECT</button>
+            </div>
+        </aside>
+
+        <main id="main-content">
+            <div id="view-container"></div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="password-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>ACCESS DENIED</h2>
+            <p>Enter administrative password for ONLYSNACKPACK:</p>
+            <input type="password" id="admin-pass-input">
+            <div class="modal-actions">
+                <button id="modal-cancel">BACK</button>
+                <button id="modal-submit">AUTHENTICATE</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a181e31d4e29f80a',t:'MTc4MzU0MzA0OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
