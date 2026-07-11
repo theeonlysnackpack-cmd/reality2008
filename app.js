@@ -1,589 +1,408 @@
-/**
- * REALITY (2008) - Core Platform Engine
- */
 
-class RealityApp {
+class RealityKernel {
     constructor() {
-        this.currentUser = JSON.parse(localStorage.getItem('reality_user')) || null;
-        this.posts = JSON.parse(localStorage.getItem('reality_posts')) || this.getDefaultPosts();
-        this.communities = JSON.parse(localStorage.getItem('reality_communities')) || this.getDefaultCommunities();
-        this.settings = JSON.parse(localStorage.getItem('reality_settings')) || {
-            darkMode: false,
-            primaryColor: '#00ff00',
-            realityName: 'My Reality'
+        this.session = JSON.parse(localStorage.getItem('R_SYS_SESSION')) || null;
+        this.db = {
+            posts: JSON.parse(localStorage.getItem('R_SYS_POSTS')) || this.loadSeedData(),
+            windows: new Map(),
+            following: new Set(JSON.parse(localStorage.getItem('R_SYS_FOLLOW')) || [])
+        };
+        
+        this.config = {
+            accent: '#00d2ff',
+            darkMode: true,
+            storageLimit: 1024 * 1024 * 5
         };
 
-        this.init();
+        this.pendingData = null;
+        this.boot();
     }
 
-    init() {
-        this.setupDOM();
-        this.setupEventListeners();
-        this.checkLogin();
-        this.updateTheme();
-        this.startClock();
-    }
+    async boot() {
+        const log = document.getElementById('boot-log');
+        const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
-    setupDOM() {
-        this.splash = document.getElementById('splash-screen');
-        this.appShell = document.getElementById('app-shell');
-        this.startBtn = document.getElementById('start-btn');
-        this.usernameInput = document.getElementById('username-input');
-        this.navItems = document.querySelectorAll('.nav-item');
-        this.viewContainer = document.getElementById('view-container');
-        this.spotlight = document.getElementById('spotlight-overlay');
-        this.logoutBtn = document.getElementById('logout-btn');
-        this.userDisplay = document.getElementById('current-user-display');
+        await delay(600); log.innerText = "LOADING SECURITY PROTOCOLS...";
+        await delay(500); log.innerText = "MOUNTING VIRTUAL DISK...";
+        await delay(700); log.innerText = "ESTABLISHING REALITY-LINK...";
         
-        // Modals
-        this.passwordModal = document.getElementById('password-modal');
-        this.adminPassInput = document.getElementById('admin-pass-input');
-        this.modalSubmit = document.getElementById('modal-submit');
-        this.modalCancel = document.getElementById('modal-cancel');
-    }
-
-    setupEventListeners() {
-        this.startBtn.addEventListener('click', () => this.login());
-        this.logoutBtn.addEventListener('click', () => this.logout());
-
-        this.navItems.forEach(item => {
-            item.addEventListener('click', (e) => {
-                const view = e.currentTarget.dataset.view;
-                this.switchView(view);
-                
-                this.navItems.forEach(i => i.classList.remove('active'));
-                e.currentTarget.classList.add('active');
-            });
-        });
-
-        // Spotlight movement
-        window.addEventListener('mousemove', (e) => {
-            if (this.settings.darkMode) {
-                this.spotlight.style.background = `radial-gradient(circle 180px at ${e.clientX}px ${e.clientY}px, transparent 0%, rgba(0,0,0,0.98) 100%)`;
-            }
-        });
-
-        // Password Modal
-        this.modalSubmit.addEventListener('click', () => this.checkAdminPass());
-        this.modalCancel.addEventListener('click', () => this.passwordModal.classList.add('hidden'));
-    }
-
-    checkLogin() {
-        if (this.currentUser) {
-            this.showApp();
-            this.userDisplay.textContent = this.currentUser.name;
-            this.switchView('feed');
+        document.getElementById('kernel-loader').classList.add('hidden');
+        this.initDOM();
+        this.attachListeners();
+        
+        if (this.session) {
+            this.unlockInterface();
         }
     }
 
-    login() {
-        const name = this.usernameInput.value.trim();
-        if (!name) return alert('Enter a username');
-
-        this.currentUser = {
-            name: name,
-            code: Math.floor(Math.random() * 900000 + 100000),
-            joined: new Date().toISOString(),
-            id: 'U-' + Date.now()
-        };
-
-        localStorage.setItem('reality_user', JSON.stringify(this.currentUser));
-        this.userDisplay.textContent = name;
-        this.showApp();
-        this.switchView('feed');
+    initDOM() {
+        this.workspace = document.getElementById('view-layer');
+        this.windowLayer = document.getElementById('window-layer');
+        this.userDisplay = document.getElementById('display-name');
+        this.clock = document.getElementById('os-clock');
+        
+        setInterval(() => {
+            const now = new Date();
+            this.clock.innerText = now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0');
+        }, 1000);
     }
 
-    logout() {
-        localStorage.removeItem('reality_user');
+    attachListeners() {
+        document.getElementById('start-btn').onclick = () => this.authenticate();
+        document.getElementById('shutdown-btn').onclick = () => this.shutdown();
+        
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.onclick = () => {
+                const view = btn.dataset.view;
+                this.navigate(view);
+                document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            };
+        });
+
+        // Admin Auth
+        document.getElementById('admin-unlock').onclick = () => {
+            if (document.getElementById('admin-pass').value === 'packers') {
+                document.getElementById('admin-gate').classList.add('hidden');
+                document.getElementById('admin-pass').value = '';
+                this.renderSnackPack();
+            } else alert("INVALID CREDENTIALS");
+        };
+        
+        document.getElementById('admin-cancel').onclick = () => {
+            document.getElementById('admin-gate').classList.add('hidden');
+        };
+
+        // File Mounting Logic
+        document.addEventListener('change', (e) => {
+            if (e.target.id === 'f-up') {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    this.pendingData = event.target.result;
+                    document.getElementById('f-name').innerText = `[ ${file.name} MOUNTED ]`;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    authenticate() {
+        const name = document.getElementById('username-input').value.trim();
+        if (!name) return;
+        
+        this.session = {
+            user: this.sanitize(name),
+            uid: 'R-' + Math.random().toString(36).substr(2, 9).toUpperCase(),
+            joined: new Date().toISOString()
+        };
+        
+        localStorage.setItem('R_SYS_SESSION', JSON.stringify(this.session));
+        this.unlockInterface();
+    }
+
+    unlockInterface() {
+        document.getElementById('splash-screen').classList.add('hidden');
+        document.getElementById('os-interface').classList.remove('hidden');
+        this.userDisplay.innerText = this.session.user;
+        this.navigate('feed');
+    }
+
+    shutdown() {
+        localStorage.clear();
         location.reload();
     }
 
-    showApp() {
-        this.splash.classList.add('hidden');
-        this.appShell.classList.remove('hidden');
-    }
-
-    updateTheme() {
-        document.body.className = this.settings.darkMode ? 'dark-mode' : 'light-mode';
-        if (this.settings.darkMode) {
-            this.spotlight.style.display = 'block';
-        } else {
-            this.spotlight.style.display = 'none';
+    navigate(view) {
+        if (view === 'snackpack') {
+            document.getElementById('admin-gate').classList.remove('hidden');
+            return;
         }
         
-        // Apply primary color to accent
-        document.documentElement.style.setProperty('--accent-color', this.settings.primaryColor);
+        this.workspace.innerHTML = '';
+        switch(view) {
+            case 'feed': this.renderFeed(); break;
+            case 'apps': this.renderAppStation(); break;
+            case 'profile': this.renderProfile(); break;
+            case 'tv': this.renderTV(); break;
+            case 'settings': this.renderSettings(); break;
+            case 'communities': this.renderCommunities(); break;
+        }
     }
 
-    switchView(view) {
-        if (view === 'snackpack') {
-            this.passwordModal.classList.remove('hidden');
+    // --- CORE RENDERERS ---
+
+    renderFeed() {
+        this.workspace.innerHTML = `
+            <div class="feed-container">
+                <div class="composer-aero glass-morph" style="padding:25px; margin-bottom:30px;">
+                    <textarea id="p-content" placeholder="Broadcast a thought... (No emojis allowed)" style="width:100%; height:80px; background:rgba(0,0,0,0.3); border:1px solid var(--accent); color:#fff; padding:15px; border-radius:10px; resize:none;"></textarea>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px;">
+                        <div class="upload-zone">
+                            <label for="f-up" class="aero-btn" style="background:#333; font-size:0.7rem;">MOUNT DATA</label>
+                            <input type="file" id="f-up" style="display:none">
+                            <span id="f-name" style="font-size:10px; margin-left:10px; color:var(--accent)"></span>
+                        </div>
+                        <button class="aero-btn" onclick="Reality.broadcast()">BROADCAST</button>
+                    </div>
+                </div>
+                <div id="os-feed-list"></div>
+            </div>
+        `;
+        this.updateFeedList();
+    }
+
+    updateFeedList() {
+        const list = document.getElementById('os-feed-list');
+        list.innerHTML = '';
+        this.db.posts.slice().reverse().forEach(post => {
+            const div = document.createElement('div');
+            div.className = 'feed-post glass-morph';
+            div.innerHTML = `
+                <div class="post-meta" style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                    <span style="font-weight:bold; color:var(--accent)">${this.sanitize(post.author)}</span>
+                    <span style="font-size:10px; opacity:0.6">${new Date(post.date).toLocaleString()}</span>
+                </div>
+                <div class="post-body" style="font-size:1rem; line-height:1.6;">${this.sanitize(post.content)}</div>
+                ${post.data ? `<div class="post-attachment" style="margin-top:15px;"><img src="${post.data}" style="max-width:100%; border:2px solid var(--accent); border-radius:8px;"></div>` : ''}
+                <div class="comment-layer" style="margin-top:20px; border-top:1px solid rgba(255,255,255,0.05); padding-top:15px;">
+                    ${post.comments.map(c => `<div class="bubble-comment">${this.sanitize(c)}</div>`).join('')}
+                    <input type="text" placeholder="Add reply..." style="width:100%; margin-top:12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:8px; border-radius:5px;" onkeypress="if(event.key==='Enter') Reality.addComment(${post.id}, this.value)">
+                </div>
+            `;
+            list.appendChild(div);
+        });
+    }
+
+    broadcast() {
+        const content = document.getElementById('p-content').value;
+        if (!content) return;
+        
+        // Anti-Emoji Security
+        if (/\p{Extended_Pictographic}/u.test(content)) {
+            alert("SECURITY ALERT: UNKNOWN CHARACTER SET DETECTED. BROADCAST ABORTED.");
             return;
         }
 
-        this.renderView(view);
+        const post = {
+            id: Date.now(),
+            author: this.session.user,
+            content: content,
+            date: new Date().toISOString(),
+            data: this.pendingData || null,
+            comments: []
+        };
+
+        this.db.posts.push(post);
+        this.saveDB();
+        this.pendingData = null;
+        this.renderFeed();
     }
 
-    checkAdminPass() {
-        if (this.adminPassInput.value === 'packers') {
-            this.passwordModal.classList.add('hidden');
-            this.adminPassInput.value = '';
-            this.renderView('snackpack');
-            // Update active nav
-            this.navItems.forEach(i => {
-                i.classList.toggle('active', i.dataset.view === 'snackpack');
-            });
-        } else {
-            alert('WRONG PASSWORD');
-            this.adminPassInput.value = '';
-        }
+    addComment(id, val) {
+        if (!val) return;
+        const p = this.db.posts.find(x => x.id === id);
+        p.comments.push(`${this.session.user}: ${val}`);
+        this.saveDB();
+        this.updateFeedList();
     }
 
-    renderView(view) {
-        this.viewContainer.innerHTML = '';
+    // --- 3D GAME ENGINE ---
+
+    launchGame() {
+        this.openWindow('VOID RUNNER 3D', '<canvas id="game-canvas"></canvas><div id="score-ui">VELOCITY: 0 KM/H</div>', 800);
+        this.init3DGame();
+    }
+
+    init3DGame() {
+        const canvas = document.getElementById('game-canvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        let speed = 2;
+        let pos = 0;
         
-        switch(view) {
-            case 'feed': this.renderFeed(); break;
-            case 'communities': this.renderCommunities(); break;
-            case 'apps': this.renderAppsGrid(); break;
-            case 'tv': this.renderTV(); break;
-            case 'snackpack': this.renderSnackPack(); break;
-            case 'profile': this.renderProfile(); break;
-            case 'settings': this.renderSettings(); break;
-        }
+        const loop = () => {
+            if (!document.getElementById('game-canvas')) return;
+            speed += 0.005;
+            pos += speed;
+            
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0,0, canvas.width, canvas.height);
+            
+            ctx.strokeStyle = this.config.accent;
+            ctx.lineWidth = 2;
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            
+            for (let i = 0; i < 15; i++) {
+                let z = ((i * 100 - pos) % 1500 + 1500) % 1500;
+                let scale = 600 / (z + 1);
+                if (scale < 0) continue;
+                
+                let size = 150 * scale;
+                ctx.globalAlpha = 1 - (z / 1500);
+                ctx.strokeRect(cx - size/2, cy - size/2, size, size);
+                
+                // Draw connecting lines
+                ctx.beginPath();
+                ctx.moveTo(cx - size/2, cy - size/2);
+                ctx.lineTo(cx, cy);
+                ctx.stroke();
+            }
+            
+            document.getElementById('score-ui').innerText = `VELOCITY: ${Math.floor(speed * 20)} KM/H`;
+            requestAnimationFrame(loop);
+        };
+        loop();
     }
 
-    // --- VIEW RENDERERS ---
+    // --- UI HELPERS ---
 
-    renderFeed() {
-        const container = document.createElement('div');
-        container.className = 'feed-container';
+    openWindow(title, html, width = 500) {
+        const id = 'win_' + Date.now();
+        const win = document.createElement('div');
+        win.className = 'window-3d glass-morph';
+        win.id = id;
+        win.style.width = width + 'px';
+        win.style.left = '100px';
+        win.style.top = '100px';
+        win.style.zIndex = 2000;
         
-        // Composer
-        const composer = document.createElement('div');
-        composer.className = 'post-composer';
-        composer.innerHTML = `
-            <textarea id="post-text" placeholder="Share your reality..."></textarea>
-            <div class="composer-tools">
-                <input type="text" id="post-music-url" placeholder="Music URL (Optional)">
-                <input type="text" id="post-media-url" placeholder="Image/Video URL (Optional)">
-                <button id="post-btn">POST</button>
+        win.innerHTML = `
+            <div class="window-header">
+                <span>${title}</span>
+                <button onclick="document.getElementById('${id}').remove()" style="background:var(--y2k-pink); border:none; color:white; width:22px; height:22px; cursor:pointer; font-weight:bold;">X</button>
             </div>
+            <div class="window-content">${html}</div>
         `;
-        container.appendChild(composer);
-
-        // Posts
-        const postsList = document.createElement('div');
-        this.posts.slice().reverse().forEach(post => {
-            const card = document.createElement('div');
-            card.className = 'post-card';
-            card.innerHTML = `
-                <div class="post-header">
-                    <span class="post-user-id">${post.author}</span>
-                    <span class="post-date">${new Date(post.date).toLocaleDateString()}</span>
-                </div>
-                <div class="post-body">${post.content}</div>
-                ${post.media ? `<div class="post-media">${post.media.endsWith('.mp4') ? `<video src="${post.media}" controls></video>` : `<img src="${post.media}">`}</div>` : ''}
-                ${post.music ? `<div class="post-music">♫ ${post.music}</div>` : ''}
-                <div class="comments-section">
-                    ${post.comments.map(c => `<div class="comment-bubble">${c}</div>`).join('')}
-                    <div class="add-comment">
-                        <input type="text" class="comment-input" placeholder="Say something..." data-id="${post.id}">
-                    </div>
-                </div>
-            `;
-            postsList.appendChild(card);
-        });
-        container.appendChild(postsList);
         
-        this.viewContainer.appendChild(container);
-
-        // Events
-        container.querySelector('#post-btn').onclick = () => this.addPost();
-        container.querySelectorAll('.comment-input').forEach(input => {
-            input.onkeypress = (e) => {
-                if (e.key === 'Enter') this.addComment(e.target.dataset.id, e.target.value);
-            };
-        });
+        this.windowLayer.appendChild(win);
+        this.makeDraggable(win);
     }
 
-    renderAppsGrid() {
-        const grid = document.createElement('div');
-        grid.className = 'apps-grid';
-        
-        // Generate 50+ apps
-        const appTypes = [
-            {n: 'Snake', g: '🐍', fn: () => this.launchGame('snake')},
-            {n: 'Tetris', g: '▦', fn: () => this.launchGame('tetris')},
-            {n: 'Paint', g: '🖌', fn: () => this.launchGame('paint')},
-            {n: 'Music Box', g: '📻', fn: () => this.launchGame('music')},
-            {n: 'Calculator', g: '＝', fn: () => this.launchGame('calc')},
-            {n: 'Calendar', g: '📅', fn: () => this.launchGame('cal')},
-            {n: 'Text Edit', g: '📝', fn: () => this.launchGame('edit')},
-            {n: 'Pong', g: '🏓', fn: () => this.launchGame('pong')},
-            {n: 'Reality Draw', g: '✎', fn: () => this.launchGame('draw')},
-            {n: 'Chat Room', g: '⌨', fn: () => this.launchGame('chat')},
+    makeDraggable(el) {
+        let p1=0, p2=0, p3=0, p4=0;
+        const header = el.querySelector('.window-header');
+        header.onmousedown = (e) => {
+            p3 = e.clientX; p4 = e.clientY;
+            document.onmouseup = () => {
+                document.onmouseup = null;
+                document.onmousemove = null;
+                el.style.transform = `rotateY(0deg) rotateX(0deg)`;
+            };
+            document.onmousemove = (e) => {
+                p1 = p3 - e.clientX; p2 = p4 - e.clientY;
+                p3 = e.clientX; p4 = e.clientY;
+                el.style.top = (el.offsetTop - p2) + "px";
+                el.style.left = (el.offsetLeft - p1) + "px";
+                // 3D Tilt Effect
+                el.style.transform = `rotateY(${p1 * 0.8}deg) rotateX(${p2 * -0.8}deg)`;
+            };
+        };
+    }
+
+    renderAppStation() {
+        this.workspace.innerHTML = `
+            <h1 class="aero-text">SYSTEM_APPS</h1>
+            <div class="apps-grid" id="agrid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap:25px; margin-top:30px;"></div>
+        `;
+        const apps = [
+            {n:'VOID_RUNNER', i:'🚀', fn:()=>this.launchGame()},
+            {n:'TERMINAL', i:'⌨', fn:()=>this.openWindow('CMD_ROOT', '<div style="background:#000; color:#0f0; padding:15px; font-family:monospace; height:200px;">SYSTEM_ACCESS_GRANTED...<br>ROOT@REALITY:~#</div>')},
+            {n:'PLAYER', i:'📻', fn:()=>this.openWindow('REALITY_FM', '<audio controls src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" style="width:100%"></audio>')},
+            {n:'VAULT', i:'💎', fn:()=>this.openWindow('SECURE_VAULT', '<p style="padding:20px;">All sensitive data encrypted.</p>')},
+            {n:'SKETCH', i:'🎨', fn:()=>this.openWindow('AERO_PAINT', '<canvas style="background:#fff; width:100%; height:300px;"></canvas>')},
         ];
-
-        for(let i=0; i<60; i++) {
-            const type = appTypes[i % appTypes.length];
-            const app = document.createElement('div');
-            app.className = 'app-icon';
-            app.innerHTML = `<div class="app-icon-glyph">${type.g}</div><div class="app-icon-label">${type.n} ${i+1}</div>`;
-            app.onclick = type.fn;
-            grid.appendChild(app);
+        
+        const grid = document.getElementById('agrid');
+        for(let i=0; i<60; i++){
+            const a = apps[i % apps.length];
+            const d = document.createElement('div');
+            d.className = 'glass-morph';
+            d.style.padding = '20px';
+            d.style.textAlign = 'center';
+            d.style.cursor = 'pointer';
+            d.innerHTML = `<div style="font-size:2.2rem;">${a.i}</div><div style="font-size:0.65rem; font-weight:bold; margin-top:8px;">${a.n}</div>`;
+            d.onclick = a.fn;
+            grid.appendChild(d);
         }
-
-        this.viewContainer.innerHTML = '<h1>REALITY APP STORE</h1><br>';
-        this.viewContainer.appendChild(grid);
     }
 
     renderTV() {
-        this.viewContainer.innerHTML = `
-            <h1 class="glitch">TEMPLE TV</h1>
-            <div class="tv-outer" style="border: 20px solid #222; border-radius: 40px; background: #111; padding: 20px; box-shadow: 0 0 50px rgba(0,0,0,0.5);">
-                <div class="tv-screen-container" style="position: relative; aspect-ratio: 16/9; background: #000; overflow: hidden; border-radius: 10px;">
-                    <video id="tv-screen" style="width: 100%; height: 100%;" autoplay loop muted></video>
-                    <div style="position: absolute; top: 10px; right: 20px; color: #0f0; font-family: monospace;">CH <span id="ch-num">01</span></div>
-                </div>
-                <div class="tv-controls" style="margin-top: 20px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
-                    <button class="tv-btn" onclick="document.getElementById('tv-screen').src='https://www.w3schools.com/html/mov_bbb.mp4'; document.getElementById('ch-num').innerText='01'">01</button>
-                    <button class="tv-btn" onclick="document.getElementById('tv-screen').src='https://www.w3schools.com/html/movie.mp4'; document.getElementById('ch-num').innerText='02'">02</button>
-                    <button class="tv-btn" onclick="const url = prompt('Enter Video URL:'); if(url) { document.getElementById('tv-screen').src=url; document.getElementById('ch-num').innerText='USR'; }">UPLOAD</button>
-                    <button class="tv-btn" onclick="document.getElementById('tv-screen').pause()">OFF</button>
+        this.workspace.innerHTML = `
+            <h1 class="aero-text">REALITY_TV</h1>
+            <div class="glass-morph" style="padding:20px; margin-top:30px;">
+                <video id="tv-v" style="width:100%; border:1px solid var(--accent);" autoplay loop src="https://www.w3schools.com/html/mov_bbb.mp4"></video>
+                <div style="margin-top:15px; display:flex; gap:10px;">
+                    <button class="aero-btn" onclick="document.getElementById('tv-v').src='https://www.w3schools.com/html/mov_bbb.mp4'">CH 01</button>
+                    <button class="aero-btn" onclick="document.getElementById('tv-v').src='https://www.w3schools.com/html/movie.mp4'">CH 02</button>
                 </div>
             </div>
-            <style>
-                .tv-btn { background: #333; color: #fff; border: none; padding: 10px; font-weight: bold; cursor: pointer; }
-                .tv-btn:hover { background: #444; color: var(--accent-color); }
-            </style>
         `;
     }
 
     renderProfile() {
-        const u = this.currentUser;
-        this.viewContainer.innerHTML = `
-            <div class="profile-card" style="border: 2px solid var(--text-color); padding: 2rem; max-width: 400px; background: var(--bubble-bg);">
-                <div class="profile-photo" style="width: 150px; height: 150px; background: #ddd; margin-bottom: 1rem; border: 1px solid var(--text-color);">
-                    <img src="https://api.dicebear.com/7.x/pixel-art/svg?seed=${u.name}" style="width: 100%">
-                </div>
-                <h2>${u.name}</h2>
-                <p>USER CODE: #${u.code}</p>
-                <p>JOINED: ${new Date(u.joined).toLocaleString()}</p>
-                <hr style="margin: 1rem 0">
-                <div class="stats">
-                    <p>POSTS: ${this.posts.filter(p => p.author === u.name).length}</p>
-                    <p>REALITY RANK: ROOKIE</p>
-                </div>
+        const u = this.session;
+        this.workspace.innerHTML = `
+            <div class="glass-morph" style="padding:40px; max-width:400px; text-align:center;">
+                <img src="https://api.dicebear.com/7.x/pixel-art/svg?seed=${u.user}" style="width:120px; border:3px solid var(--accent); margin-bottom:20px;">
+                <h2 class="aero-text">${u.user}</h2>
+                <p style="opacity:0.6; font-size:0.8rem;">ID: ${u.uid}</p>
+                <p style="margin-top:20px;">JOINED: ${new Date(u.joined).toLocaleDateString()}</p>
+            </div>
+        `;
+    }
+
+    renderSnackPack() {
+        this.workspace.innerHTML = `
+            <div class="glass-morph" style="padding:40px; border:2px solid var(--y2k-pink);">
+                <h1 style="color:var(--y2k-pink)" class="aero-text">ONLYSNACKPACK</h1>
+                <p>Welcome back, Admin. System is stable.</p>
+                <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJ6bnFqdGZqZndqZndqZndqZndqZndqZndqZndqZndqZndqJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/3o7TKDkDbIDJieKbVm/giphy.gif" style="width:100%; margin-top:20px; border-radius:10px;">
             </div>
         `;
     }
 
     renderSettings() {
-        this.viewContainer.innerHTML = `
-            <h1>SETTINGS</h1>
-            <div style="margin-top: 2rem; display: flex; flex-direction: column; gap: 1rem;">
-                <label>
-                    <input type="checkbox" id="dark-mode-toggle" ${this.settings.darkMode ? 'checked' : ''}> DARK MODE (SPOTLIGHT)
-                </label>
-                <label>
-                    PRIMARY COLOR: <input type="color" id="color-picker" value="${this.settings.primaryColor}">
-                </label>
-                <label>
-                    REALITY NAME: <input type="text" id="reality-name" value="${this.settings.realityName}">
-                </label>
-                <button id="save-settings">SAVE CHANGES</button>
-            </div>
-        `;
-        
-        document.getElementById('save-settings').onclick = () => {
-            this.settings.darkMode = document.getElementById('dark-mode-toggle').checked;
-            this.settings.primaryColor = document.getElementById('color-picker').value;
-            this.settings.realityName = document.getElementById('reality-name').value;
-            localStorage.setItem('reality_settings', JSON.stringify(this.settings));
-            this.updateTheme();
-            alert('Settings saved!');
-        };
-    }
-
-    renderSnackPack() {
-        this.viewContainer.innerHTML = `
-            <h1 style="color: var(--y2k-pink)">ONLYSNACKPACK (ADMIN ONLY)</h1>
-            <p>Welcome back, pack member.</p>
-            <div class="admin-feed" style="margin-top: 2rem;">
-                <div class="admin-post" style="border: 5px solid var(--y2k-pink); padding: 1rem; margin-bottom: 2rem;">
-                    <h3>TOP SECRET VIDEO</h3>
-                    <video src="https://www.w3schools.com/html/mov_bbb.mp4" controls style="width: 100%"></video>
+        this.workspace.innerHTML = `
+            <div class="glass-morph" style="padding:30px;">
+                <h1 class="aero-text">SYSTEM_CONFIG</h1>
+                <div style="margin-top:30px; display:flex; flex-direction:column; gap:20px;">
+                    <label><input type="checkbox" checked> DARK_MODE SPOTLIGHT ACTIVE</label>
+                    <label>THEME_ACCENT: <input type="color" value="${this.config.accent}"></label>
+                    <button class="aero-btn" onclick="alert('Kernel Config Updated')">COMMIT CHANGES</button>
                 </div>
             </div>
         `;
     }
 
     renderCommunities() {
-        this.viewContainer.innerHTML = `
-            <h1>COMMUNITIES</h1>
-            <div class="community-actions" style="margin-bottom: 2rem;">
-                <button id="create-comm-btn">CREATE NEW COMMUNITY</button>
-            </div>
-            <div class="communities-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
-                ${this.communities.map(c => `
-                    <div class="comm-card" style="border: 2px solid ${c.color}; padding: 1rem; background: var(--bubble-bg);">
-                        <h3>${c.name}</h3>
-                        <p>${c.desc}</p>
-                        <button style="background: ${c.color}">JOIN</button>
-                    </div>
-                `).join('')}
+        this.workspace.innerHTML = `
+            <h1 class="aero-text">REALITY_POCKETS</h1>
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:20px; margin-top:30px;">
+                <div class="glass-morph" style="padding:20px; border-top:5px solid var(--accent)"><h3>VOID</h3><p>Minimalist thoughts.</p></div>
+                <div class="glass-morph" style="padding:20px; border-top:5px solid var(--y2k-pink)"><h3>NEON</h3><p>High velocity chat.</p></div>
+                <div class="glass-morph" style="padding:20px; border-top:5px solid #fff; border-style:dashed;"><h3>+ NEW</h3></div>
             </div>
         `;
-        
-        document.getElementById('create-comm-btn').onclick = () => {
-            const name = prompt("Community Name?");
-            if (name) {
-                this.communities.push({
-                    name: name,
-                    desc: "A new reality pocket.",
-                    color: "#" + Math.floor(Math.random()*16777215).toString(16),
-                    members: 1
-                });
-                localStorage.setItem('reality_communities', JSON.stringify(this.communities));
-                this.renderCommunities();
-            }
-        };
     }
 
-    // --- LOGIC HELPERS ---
+    // --- SECURITY ---
 
-    addPost() {
-        const textInput = document.getElementById('post-text');
-        const text = textInput.value;
-        const media = document.getElementById('post-media-url').value;
-        const music = document.getElementById('post-music-url').value;
-        
-        // Emoji check
-        const emojiRegex = /\p{Extended_Pictographic}/u;
-        if (emojiRegex.test(text)) {
-            alert("EMOJIS ARE FORBIDDEN IN THIS REALITY.");
-            return;
-        }
-
-        if (!text) return;
-
-        const newPost = {
-            id: Date.now(),
-            author: this.currentUser.name,
-            content: text,
-            media: media || null,
-            music: music || null,
-            date: new Date().toISOString(),
-            comments: []
-        };
-
-        this.posts.push(newPost);
-        localStorage.setItem('reality_posts', JSON.stringify(this.posts));
-        this.renderFeed();
+    sanitize(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
     }
 
-    addComment(postId, comment) {
-        const post = this.posts.find(p => p.id == postId);
-        if (post) {
-            post.comments.push(`${this.currentUser.name}: ${comment}`);
-            localStorage.setItem('reality_posts', JSON.stringify(this.posts));
-            this.renderFeed();
-        }
+    saveDB() {
+        localStorage.setItem('R_SYS_POSTS', JSON.stringify(this.db.posts));
     }
 
-    launchGame(gameId) {
-        const overlay = document.createElement('div');
-        overlay.id = 'game-overlay';
-        overlay.innerHTML = `
-            <div id="game-header">
-                <span>REALITY OS / APPS / ${gameId.toUpperCase()}</span>
-                <button onclick="this.parentElement.parentElement.remove()">CLOSE [X]</button>
-            </div>
-            <div id="game-canvas-container">
-                <div id="game-content-wrapper" style="color: #0f0; font-family: monospace; text-align: center;">
-                    <div id="game-canvas-target"></div>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(overlay);
-
-        const target = overlay.querySelector('#game-canvas-target');
-
-        if (gameId === 'snake') {
-            this.startSnake(target);
-        } else if (gameId === 'pong') {
-            this.startPong(target);
-        } else if (gameId === 'draw') {
-            this.startDraw(target);
-        } else {
-            target.innerHTML = `
-                <div style="padding: 20px; border: 2px solid #0f0;">
-                    APP: ${gameId}<br>
-                    STATUS: RUNNING<br>
-                    MEMORY: STABLE<br><br>
-                    [SYSTEM PLACEHOLDER]<br>
-                    <button onclick="alert('Module loading...')">ACTIVATE MODULE</button>
-                </div>
-            `;
-        }
-    }
-
-    startPong(container) {
-        const canvas = document.createElement('canvas');
-        canvas.width = 600;
-        canvas.height = 400;
-        canvas.style.border = '2px solid #fff';
-        container.appendChild(canvas);
-        const ctx = canvas.getContext('2d');
-
-        let ball = { x: 300, y: 200, dx: 4, dy: 4, r: 10 };
-        let p1 = { y: 150, h: 100, w: 10, score: 0 };
-        let p2 = { y: 150, h: 100, w: 10, score: 0 };
-
-        const loop = setInterval(() => {
-            ball.x += ball.dx;
-            ball.y += ball.dy;
-
-            // Wall bounce
-            if (ball.y <= 0 || ball.y >= 400) ball.dy *= -1;
-
-            // Paddle bounce
-            if (ball.x <= 20 && ball.y >= p1.y && ball.y <= p1.y + p1.h) ball.dx *= -1;
-            if (ball.x >= 580 && ball.y >= p2.y && ball.y <= p2.y + p2.h) ball.dx *= -1;
-
-            // AI for P2
-            p2.y += (ball.y - (p2.y + 50)) * 0.1;
-
-            // Scoring
-            if (ball.x < 0) { p2.score++; ball.x = 300; ball.dx = 4; }
-            if (ball.x > 600) { p1.score++; ball.x = 300; ball.dx = -4; }
-
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0,0,600,400);
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(10, p1.y, p1.w, p1.h);
-            ctx.fillRect(580, p2.y, p2.w, p2.h);
-            ctx.beginPath();
-            ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
-            ctx.fill();
-            ctx.font = '20px monospace';
-            ctx.fillText(`${p1.score} | ${p2.score}`, 280, 30);
-        }, 1000/60);
-
-        window.onmousemove = (e) => {
-            p1.y = e.clientY - 200;
-        };
-
-        const cleanup = () => clearInterval(loop);
-        container.closest('#game-overlay').querySelector('button').addEventListener('click', cleanup);
-    }
-
-    startDraw(container) {
-        const canvas = document.createElement('canvas');
-        canvas.width = 800;
-        canvas.height = 600;
-        canvas.style.background = '#fff';
-        canvas.style.cursor = 'crosshair';
-        container.appendChild(canvas);
-        const ctx = canvas.getContext('2d');
-        let drawing = false;
-
-        canvas.onmousedown = () => drawing = true;
-        canvas.onmouseup = () => { drawing = false; ctx.beginPath(); };
-        canvas.onmousemove = (e) => {
-            if (!drawing) return;
-            ctx.lineWidth = 5;
-            ctx.lineCap = 'round';
-            ctx.strokeStyle = '#000';
-            const rect = canvas.getBoundingClientRect();
-            ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
-            ctx.stroke();
-        };
-    }
-
-    startSnake(container) {
-        const canvas = document.createElement('canvas');
-        canvas.width = 400;
-        canvas.height = 400;
-        canvas.style.border = '2px solid #0f0';
-        container.innerHTML = '';
-        container.appendChild(canvas);
-        const ctx = canvas.getContext('2d');
-        
-        let snake = [{x: 200, y: 200}];
-        let food = {x: 0, y: 0};
-        let dx = 20;
-        let dy = 0;
-        
-        const resetFood = () => {
-            food.x = Math.floor(Math.random() * 20) * 20;
-            food.y = Math.floor(Math.random() * 20) * 20;
-        };
-        resetFood();
-
-        const loop = setInterval(() => {
-            const head = {x: snake[0].x + dx, y: snake[0].y + dy};
-            snake.unshift(head);
-
-            if (head.x === food.x && head.y === food.y) {
-                resetFood();
-            } else {
-                snake.pop();
-            }
-
-            // Boundaries
-            if (head.x < 0 || head.x >= 400 || head.y < 0 || head.y >= 400) {
-                clearInterval(loop);
-                alert('GAME OVER');
-                container.parentElement.parentElement.parentElement.remove();
-            }
-
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0,0,400,400);
-            ctx.fillStyle = '#0f0';
-            snake.forEach(p => ctx.fillRect(p.x, p.y, 18, 18));
-            ctx.fillStyle = '#f00';
-            ctx.fillRect(food.x, food.y, 18, 18);
-        }, 100);
-
-        window.onkeydown = (e) => {
-            if (e.key === 'ArrowUp' && dy === 0) { dx = 0; dy = -20; }
-            if (e.key === 'ArrowDown' && dy === 0) { dx = 0; dy = 20; }
-            if (e.key === 'ArrowLeft' && dx === 0) { dx = -20; dy = 0; }
-            if (e.key === 'ArrowRight' && dx === 0) { dx = 20; dy = 0; }
-        };
-    }
-
-    getDefaultPosts() {
-        return [
-            {
-                id: 1,
-                author: 'RealityAdmin',
-                content: 'Welcome to Reality(2008). No emojis allowed here.',
-                date: new Date('2008-01-01').toISOString(),
-                comments: ['Cool!', 'Finally a place without fake people.'],
-                media: null,
-                music: 'Vaporwave Dreams'
-            }
-        ];
-    }
-
-    getDefaultCommunities() {
-        return [
-            { name: 'Gamerz', desc: 'Old school play.', color: '#007bff' },
-            { name: 'Music Makers', desc: 'Upload your own beats.', color: '#ff00ff' },
-            { name: 'Void', desc: 'Minimalist thoughts.', color: '#ffffff' }
-        ];
-    }
-
-    startClock() {
-        setInterval(() => {
-            // Can be used for UI updates
-        }, 1000);
+    loadSeedData() {
+        return [{ id: 1, author: 'REALITY_KERNEL', content: 'SYSTEM ONLINE. Welcome to Reality OS v4.0.0.', date: new Date().toISOString(), comments: ["STABLE BUILD."] }];
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    window.Reality = new RealityApp();
-});
+window.Reality = new RealityKernel();
