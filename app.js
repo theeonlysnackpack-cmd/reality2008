@@ -1,4 +1,5 @@
 
+
 class RealityKernel {
     constructor() {
         this.session = JSON.parse(localStorage.getItem('R_SYS_SESSION')) || null;
@@ -19,13 +20,7 @@ class RealityKernel {
     }
 
     async boot() {
-        const log = document.getElementById('boot-log');
-        const delay = (ms) => new Promise(res => setTimeout(res, ms));
-
-        await delay(600); log.innerText = "LOADING SECURITY PROTOCOLS...";
-        await delay(500); log.innerText = "MOUNTING VIRTUAL DISK...";
-        await delay(700); log.innerText = "ESTABLISHING REALITY-LINK...";
-        
+        // REMOVED ARTIFICIAL DELAYS FOR INSTANT LOADING
         document.getElementById('kernel-loader').classList.add('hidden');
         this.initDOM();
         this.attachListeners();
@@ -60,7 +55,6 @@ class RealityKernel {
             };
         });
 
-        // Admin Auth
         document.getElementById('admin-unlock').onclick = () => {
             if (document.getElementById('admin-pass').value === 'packers') {
                 document.getElementById('admin-gate').classList.add('hidden');
@@ -73,7 +67,6 @@ class RealityKernel {
             document.getElementById('admin-gate').classList.add('hidden');
         };
 
-        // File Mounting Logic
         document.addEventListener('change', (e) => {
             if (e.target.id === 'f-up') {
                 const file = e.target.files[0];
@@ -131,13 +124,11 @@ class RealityKernel {
         }
     }
 
-    // --- CORE RENDERERS ---
-
     renderFeed() {
         this.workspace.innerHTML = `
             <div class="feed-container">
                 <div class="composer-aero glass-morph" style="padding:25px; margin-bottom:30px;">
-                    <textarea id="p-content" placeholder="Broadcast a thought... (No emojis allowed)" style="width:100%; height:80px; background:rgba(0,0,0,0.3); border:1px solid var(--accent); color:#fff; padding:15px; border-radius:10px; resize:none;"></textarea>
+                    <textarea id="p-content" placeholder="Broadcast a thought..." style="width:100%; height:80px; background:rgba(0,0,0,0.3); border:1px solid var(--accent); color:#fff; padding:15px; border-radius:10px; resize:none;"></textarea>
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px;">
                         <div class="upload-zone">
                             <label for="f-up" class="aero-btn" style="background:#333; font-size:0.7rem;">MOUNT DATA</label>
@@ -178,8 +169,6 @@ class RealityKernel {
     broadcast() {
         const content = document.getElementById('p-content').value;
         if (!content) return;
-        
-        // Anti-Emoji Security
         if (/\p{Extended_Pictographic}/u.test(content)) {
             alert("SECURITY ALERT: UNKNOWN CHARACTER SET DETECTED. BROADCAST ABORTED.");
             return;
@@ -208,8 +197,6 @@ class RealityKernel {
         this.updateFeedList();
     }
 
-    // --- 3D GAME ENGINE ---
-
     launchGame() {
         this.openWindow('VOID RUNNER 3D', '<canvas id="game-canvas"></canvas><div id="score-ui">VELOCITY: 0 KM/H</div>', 800);
         this.init3DGame();
@@ -226,38 +213,29 @@ class RealityKernel {
             if (!document.getElementById('game-canvas')) return;
             speed += 0.005;
             pos += speed;
-            
             ctx.fillStyle = '#000';
             ctx.fillRect(0,0, canvas.width, canvas.height);
-            
             ctx.strokeStyle = this.config.accent;
             ctx.lineWidth = 2;
             const cx = canvas.width / 2;
             const cy = canvas.height / 2;
-            
             for (let i = 0; i < 15; i++) {
                 let z = ((i * 100 - pos) % 1500 + 1500) % 1500;
                 let scale = 600 / (z + 1);
                 if (scale < 0) continue;
-                
                 let size = 150 * scale;
                 ctx.globalAlpha = 1 - (z / 1500);
                 ctx.strokeRect(cx - size/2, cy - size/2, size, size);
-                
-                // Draw connecting lines
                 ctx.beginPath();
                 ctx.moveTo(cx - size/2, cy - size/2);
                 ctx.lineTo(cx, cy);
                 ctx.stroke();
             }
-            
             document.getElementById('score-ui').innerText = `VELOCITY: ${Math.floor(speed * 20)} KM/H`;
             requestAnimationFrame(loop);
         };
         loop();
     }
-
-    // --- UI HELPERS ---
 
     openWindow(title, html, width = 500) {
         const id = 'win_' + Date.now();
@@ -268,15 +246,13 @@ class RealityKernel {
         win.style.left = '100px';
         win.style.top = '100px';
         win.style.zIndex = 2000;
-        
         win.innerHTML = `
             <div class="window-header">
                 <span>${title}</span>
-                <button onclick="document.getElementById('${id}').remove()" style="background:var(--y2k-pink); border:none; color:white; width:22px; height:22px; cursor:pointer; font-weight:bold;">X</button>
+                <button onclick="document.getElementById('${id}').remove()" style="background:#ff007f; border:none; color:white; width:22px; height:22px; cursor:pointer;">X</button>
             </div>
             <div class="window-content">${html}</div>
         `;
-        
         this.windowLayer.appendChild(win);
         this.makeDraggable(win);
     }
@@ -296,25 +272,19 @@ class RealityKernel {
                 p3 = e.clientX; p4 = e.clientY;
                 el.style.top = (el.offsetTop - p2) + "px";
                 el.style.left = (el.offsetLeft - p1) + "px";
-                // 3D Tilt Effect
                 el.style.transform = `rotateY(${p1 * 0.8}deg) rotateX(${p2 * -0.8}deg)`;
             };
         };
     }
 
     renderAppStation() {
-        this.workspace.innerHTML = `
-            <h1 class="aero-text">SYSTEM_APPS</h1>
-            <div class="apps-grid" id="agrid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap:25px; margin-top:30px;"></div>
-        `;
+        this.workspace.innerHTML = `<h1 class="aero-text">SYSTEM_APPS</h1><div class="apps-grid" id="agrid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap:25px; margin-top:30px;"></div>`;
         const apps = [
             {n:'VOID_RUNNER', i:'🚀', fn:()=>this.launchGame()},
-            {n:'TERMINAL', i:'⌨', fn:()=>this.openWindow('CMD_ROOT', '<div style="background:#000; color:#0f0; padding:15px; font-family:monospace; height:200px;">SYSTEM_ACCESS_GRANTED...<br>ROOT@REALITY:~#</div>')},
+            {n:'TERMINAL', i:'⌨', fn:()=>this.openWindow('CMD_ROOT', '<div style="background:#000; color:#0f0; padding:15px; font-family:monospace; height:200px;">ROOT@REALITY:~#</div>')},
             {n:'PLAYER', i:'📻', fn:()=>this.openWindow('REALITY_FM', '<audio controls src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" style="width:100%"></audio>')},
             {n:'VAULT', i:'💎', fn:()=>this.openWindow('SECURE_VAULT', '<p style="padding:20px;">All sensitive data encrypted.</p>')},
-            {n:'SKETCH', i:'🎨', fn:()=>this.openWindow('AERO_PAINT', '<canvas style="background:#fff; width:100%; height:300px;"></canvas>')},
         ];
-        
         const grid = document.getElementById('agrid');
         for(let i=0; i<60; i++){
             const a = apps[i % apps.length];
@@ -330,65 +300,25 @@ class RealityKernel {
     }
 
     renderTV() {
-        this.workspace.innerHTML = `
-            <h1 class="aero-text">REALITY_TV</h1>
-            <div class="glass-morph" style="padding:20px; margin-top:30px;">
-                <video id="tv-v" style="width:100%; border:1px solid var(--accent);" autoplay loop src="https://www.w3schools.com/html/mov_bbb.mp4"></video>
-                <div style="margin-top:15px; display:flex; gap:10px;">
-                    <button class="aero-btn" onclick="document.getElementById('tv-v').src='https://www.w3schools.com/html/mov_bbb.mp4'">CH 01</button>
-                    <button class="aero-btn" onclick="document.getElementById('tv-v').src='https://www.w3schools.com/html/movie.mp4'">CH 02</button>
-                </div>
-            </div>
-        `;
+        this.workspace.innerHTML = `<h1 class="aero-text">REALITY_TV</h1><div class="glass-morph" style="padding:20px; margin-top:30px;"><video id="tv-v" style="width:100%;" autoplay loop src="https://www.w3schools.com/html/mov_bbb.mp4"></video></div>`;
     }
 
     renderProfile() {
         const u = this.session;
-        this.workspace.innerHTML = `
-            <div class="glass-morph" style="padding:40px; max-width:400px; text-align:center;">
-                <img src="https://api.dicebear.com/7.x/pixel-art/svg?seed=${u.user}" style="width:120px; border:3px solid var(--accent); margin-bottom:20px;">
-                <h2 class="aero-text">${u.user}</h2>
-                <p style="opacity:0.6; font-size:0.8rem;">ID: ${u.uid}</p>
-                <p style="margin-top:20px;">JOINED: ${new Date(u.joined).toLocaleDateString()}</p>
-            </div>
-        `;
+        this.workspace.innerHTML = `<div class="glass-morph" style="padding:40px; max-width:400px; text-align:center;"><img src="https://api.dicebear.com/7.x/pixel-art/svg?seed=${u.user}" style="width:120px; border:3px solid var(--accent); margin-bottom:20px;"><h2 class="aero-text">${u.user}</h2><p>ID: ${u.uid}</p></div>`;
     }
 
     renderSnackPack() {
-        this.workspace.innerHTML = `
-            <div class="glass-morph" style="padding:40px; border:2px solid var(--y2k-pink);">
-                <h1 style="color:var(--y2k-pink)" class="aero-text">ONLYSNACKPACK</h1>
-                <p>Welcome back, Admin. System is stable.</p>
-                <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJ6bnFqdGZqZndqZndqZndqZndqZndqZndqZndqZndqZndqJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/3o7TKDkDbIDJieKbVm/giphy.gif" style="width:100%; margin-top:20px; border-radius:10px;">
-            </div>
-        `;
+        this.workspace.innerHTML = `<div class="glass-morph" style="padding:40px; border:2px solid #ff007f;"><h1 style="color:#ff007f">ONLYSNACKPACK</h1><p>Welcome back, Admin.</p></div>`;
     }
 
     renderSettings() {
-        this.workspace.innerHTML = `
-            <div class="glass-morph" style="padding:30px;">
-                <h1 class="aero-text">SYSTEM_CONFIG</h1>
-                <div style="margin-top:30px; display:flex; flex-direction:column; gap:20px;">
-                    <label><input type="checkbox" checked> DARK_MODE SPOTLIGHT ACTIVE</label>
-                    <label>THEME_ACCENT: <input type="color" value="${this.config.accent}"></label>
-                    <button class="aero-btn" onclick="alert('Kernel Config Updated')">COMMIT CHANGES</button>
-                </div>
-            </div>
-        `;
+        this.workspace.innerHTML = `<div class="glass-morph" style="padding:30px;"><h1 class="aero-text">SYSTEM_CONFIG</h1><label><input type="checkbox" checked> DARK_MODE ACTIVE</label></div>`;
     }
 
     renderCommunities() {
-        this.workspace.innerHTML = `
-            <h1 class="aero-text">REALITY_POCKETS</h1>
-            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:20px; margin-top:30px;">
-                <div class="glass-morph" style="padding:20px; border-top:5px solid var(--accent)"><h3>VOID</h3><p>Minimalist thoughts.</p></div>
-                <div class="glass-morph" style="padding:20px; border-top:5px solid var(--y2k-pink)"><h3>NEON</h3><p>High velocity chat.</p></div>
-                <div class="glass-morph" style="padding:20px; border-top:5px solid #fff; border-style:dashed;"><h3>+ NEW</h3></div>
-            </div>
-        `;
+        this.workspace.innerHTML = `<h1 class="aero-text">REALITY_POCKETS</h1><div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:20px; margin-top:30px;"><div class="glass-morph" style="padding:20px;"><h3>VOID</h3></div><div class="glass-morph" style="padding:20px;"><h3>NEON</h3></div></div>`;
     }
-
-    // --- SECURITY ---
 
     sanitize(str) {
         const div = document.createElement('div');
@@ -396,12 +326,10 @@ class RealityKernel {
         return div.innerHTML;
     }
 
-    saveDB() {
-        localStorage.setItem('R_SYS_POSTS', JSON.stringify(this.db.posts));
-    }
+    saveDB() { localStorage.setItem('R_SYS_POSTS', JSON.stringify(this.db.posts)); }
 
     loadSeedData() {
-        return [{ id: 1, author: 'REALITY_KERNEL', content: 'SYSTEM ONLINE. Welcome to Reality OS v4.0.0.', date: new Date().toISOString(), comments: ["STABLE BUILD."] }];
+        return [{ id: 1, author: 'KERNEL', content: 'SYSTEM ONLINE.', date: new Date().toISOString(), comments: [] }];
     }
 }
 
